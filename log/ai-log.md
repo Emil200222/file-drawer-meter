@@ -44,3 +44,9 @@ One entry per task: date, what I asked, which model, files read and written, any
 - Done (S&P 500 vs OMXS30): found the student's file at MetaScienceCourse-Hackathon-2-tasks\hackathon2\F2-saving-and-borrowing\my-simulation-SPX-vs-OMXS30.html (self-contained, no external files); copied it to a new folder C:\Users\Emilw\Downloads\sp500-vs-omxs30 as index.html (the original kit file untouched); created public repo Emil200222/sp500-vs-omxs30 and pushed; linked and deployed to production https://sp500-vs-omxs30.vercel.app (verified: serves the page, title "S&P 500 vs OMXS30 — historical returns").
 - Could not do: the GitHub-to-Vercel auto-sync for both projects — "vercel git connect" fails until the student installs the Vercel GitHub App on GitHub (a browser consent step only they can do). After that, one command per project finishes it; until then, updates go live via "vercel deploy --prod" from each folder.
 - Note: both deployments have Vercel Authentication (deployment protection) on; the student can turn it off in each project's settings to share the links with classmates.
+
+## 2026-11-16 — GitHub-Vercel auto-sync connected (both projects)
+- Asked: after the student installed the Vercel GitHub App, connect both repos so every push deploys automatically.
+- Model: GLM-5.3-Flash Free (opencode), via OpenCode.
+- Done: "vercel git connect" succeeded for Emil200222/file-drawer-meter → project emil-388f/file-drawer-meter, and Emil200222/sp500-vs-omxs30 was already connected to its project. This log entry is pushed right after, and its Vercel deployment (triggered by the push, not by the CLI) is the check that auto-sync works.
+- Nothing else changed: no tool code touched.
