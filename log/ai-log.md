@@ -50,3 +50,9 @@ One entry per task: date, what I asked, which model, files read and written, any
 - Model: GLM-5.3-Flash Free (opencode), via OpenCode.
 - Done: "vercel git connect" succeeded for Emil200222/file-drawer-meter → project emil-388f/file-drawer-meter, and Emil200222/sp500-vs-omxs30 was already connected to its project. This log entry is pushed right after, and its Vercel deployment (triggered by the push, not by the CLI) is the check that auto-sync works.
 - Nothing else changed: no tool code touched.
+
+## 2026-11-16 — S&P 500 vs OMXS30: history extended to 1930 (per student request), tested and deployed
+- Asked: make the start year 1930; then test/validate/modify "only for the S&P" as I see fit.
+- Model: GLM-5.3-Flash Free (opencode), via OpenCode.
+- Done: sourced 1930-1986 data (Damodaran/NYU Stern for US returns + T-bills; Frennberg & Hansson via Riksbank vol 2 ch 6 Tables A6.2/A6.3 for Swedish price index, CPI and bill yields; Minneapolis Fed for US CPI), extended the sim's arrays to 95 years, start year slider and "Full history" preset now 1930; fixed two edge-case bugs (leveraged pot going negative now treated as a margin call at 0; IRR card shows "—" for a 0-year window); the page's numbers verified against an independent Node recomputation to the dollar; salary saving honestly 0 pre-1987 because no citable wage series could be fetched (SSA blocks automated downloads) — disclosed in the page. Full entry in the sp500-vs-omxs30 repo's own log/ai-log.md.
+- Deployment: push to Emil200222/sp500-vs-omxs30 auto-deployed on Vercel (new Ready production build, no manual deploy); live site re-verified at 1930 with zero console errors.
