@@ -1,0 +1,17 @@
+
+
+# --- added by the course kit: never on GitHub
+backups/
+.vercel/
+.env
+.env.*
+*.key
+guide-files/
+START-*.cmd
+AUTOPILOT-*.cmd
+START-*.command
+AUTOPILOT-*.command
+*.docx
+~$*
+.DS_Store
+Thumbs.db

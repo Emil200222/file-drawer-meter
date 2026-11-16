@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My tool</title>
+<!--
+  TOOL STARTER TEMPLATE (Meta-science course, University of Innsbruck, Hackathon 3)
+
+  HOW THIS FILE WORKS
+  - Everything you (or the AI) need to change is in ONE place: the  const TOOL = { ... }  block below,
+    between the marker lines "===== EDIT BELOW" and "===== EDIT ABOVE".
+  - The last script (it starts with "DO NOT EDIT BELOW THIS LINE") draws the page and talks to the internet
+    safely (see api.getJSON below). Leave it alone.
+  - Open the page in a browser, fill in the settings, press "Run". After a change to this file, reload (F5).
+
+  THE TOOL BLOCK HAS THESE PARTS:
+    meta          title, the question the tool answers, author
+    inputs        the settings: { id, label, type: "text" or "number", value (start value), min, max, help }
+    presets       2-3 named real examples; each sets some input values
+    run(p, api)   THE TOOL. async function. Gets the settings as p (e.g. p.topic, p.fromYear) and returns
+                    { cards: [{label, value, note}],
+                      chart: { type: "line" or "bar", title, xLabel, yLabel, x: [...], series: [{name, values}] , yMin, yMax },
+                      table: { columns: ["...", ...], rows: [[cell, cell, ...], ...] } }
+                  A table cell is a text/number, or { text: "...", href: "https://..." } for a link.
+    takeaway(p, r) one or two plain sentences about the result r (computed from r, never fixed text)
+    methodology   how / assumptions / references (real, checkable sources only)
+
+  THE api OBJECT (already written and tested; use it for EVERY internet call):
+    await api.getJSON(url)  -> the answer as a JavaScript object. It waits politely between calls
+                               (Crossref: 1.2 s, others: 0.5 s), gives up after 20 s, retries 3 times
+                               after "429 Too Many Requests", remembers answers in this browser
+                               (a second run costs no calls), and in "sample" mode answers from
+                               sample-data/sample.js instead of the internet.
+    api.progress("text")    -> shows a status line, e.g. "Checking 3 of 24"
+    api.asOfYear            -> the year to count "years since" from (this year, or the sample's year)
+    api.mode                -> "live" or "sample"
+    api.calls               -> how many real internet calls this run made so far
+
+  Page address options: add  ?sample=1  to use the saved sample data,  ?autorun=1  to run at once.
+-->
+<style>
+  :root { --ink:#1c1917; --ink2:#57534e; --line:#e7e5e4; --bg:#fafaf9; --card:#fff; --accent:#b45309; --accent2:#1d4ed8; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: Georgia, "Times New Roman", serif; background:var(--bg); color:var(--ink); }
+  header { padding:28px 32px 8px; max-width:1200px; margin:auto; }
+  header h1 { margin:0 0 6px; font-size:30px; }
+  header p { margin:0; color:var(--ink2); font-size:18px; }
+  .tag { display:inline-block; font:12px/1 system-ui, sans-serif; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); margin-bottom:8px; }
+  main { display:grid; grid-template-columns: 320px 1fr; gap:24px; padding:16px 32px 40px; max-width:1200px; margin:auto; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; }
+  .panel h2 { font:600 13px/1 system-ui, sans-serif; letter-spacing:.06em; text-transform:uppercase; color:var(--ink2); margin:0 0 14px; }
+  .input { margin-bottom:16px; font-family: system-ui, sans-serif; }
+  .input label { display:block; font-size:14px; font-weight:600; margin-bottom:4px; }
+  .input input { width:100%; font:15px system-ui, sans-serif; padding:6px 8px; border:1px solid var(--line); border-radius:8px; }
+  .input .help { font-size:12px; color:var(--ink2); margin-top:2px; }
+  .presets { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+  .presets button { font:13px system-ui, sans-serif; padding:6px 10px; border-radius:999px; border:1px solid var(--line); background:#fff; cursor:pointer; }
+  .presets button:hover, .presets button.on { border-color:var(--accent); color:var(--accent); }
+  .preset-note { font:13px system-ui, sans-serif; color:var(--ink2); min-height:18px; margin:-6px 0 12px; }
+  .run { font:600 15px system-ui, sans-serif; padding:9px 16px; border-radius:8px; border:0; background:var(--accent); color:#fff; cursor:pointer; width:100%; }
+  .run:disabled { opacity:.5; cursor:wait; }
+  .mode { font:13px system-ui, sans-serif; color:var(--ink2); margin-top:12px; display:flex; gap:6px; align-items:center; }
+  .status { font:13px system-ui, sans-serif; color:var(--ink2); min-height:18px; margin:10px 0 0; }
+  .notice { background:#fffbeb; border:1px solid #fde68a; color:#92400e; padding:8px 12px; border-radius:8px; font:13px system-ui, sans-serif; margin-bottom:12px; }
+  .cards { display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap:12px; margin-bottom:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
+  .card .l { font:12px system-ui, sans-serif; color:var(--ink2); text-transform:uppercase; letter-spacing:.05em; }
+  .card .v { font-size:28px; margin-top:4px; font-variant-numeric: tabular-nums; }
+  .card .n { font:12px system-ui, sans-serif; color:var(--ink2); margin-top:2px; }
+  .takeaway { border-left:4px solid var(--accent); background:#fffbeb; padding:12px 16px; border-radius:6px; font-size:18px; margin:16px 0; }
+  .takeaway:empty { display:none; }
+  details { margin-top:16px; font-family: system-ui, sans-serif; font-size:14px; line-height:1.5; }
+  summary { cursor:pointer; font-weight:600; }
+  table { border-collapse:collapse; width:100%; font:13px system-ui, sans-serif; }
+  th, td { border-bottom:1px solid var(--line); padding:5px 6px; text-align:left; vertical-align:top; }
+  th { color:var(--ink2); font-weight:600; }
+  .tablewrap { max-height:420px; overflow:auto; }
+  svg text { font-family: system-ui, sans-serif; font-size:12px; fill: var(--ink2); }
+  .legend { font:13px system-ui, sans-serif; display:flex; gap:16px; flex-wrap:wrap; margin-top:4px; }
+  .legend span::before { content:""; display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:-1px; background:var(--c); }
+  .error { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; padding:12px; border-radius:8px; font:14px system-ui, sans-serif; white-space:pre-wrap; margin-bottom:12px; }
+  .reset { font:13px system-ui, sans-serif; padding:6px 10px; border-radius:8px; border:1px solid var(--line); background:#fff; cursor:pointer; margin-bottom:12px; }
+  footer { max-width:1200px; margin:auto; padding:0 32px 32px; font:12px system-ui, sans-serif; color:var(--ink2); }
+</style>
+<script>
+// Shows an error that stops the page from starting (for example a typo in the TOOL block) on the page itself.
+window.addEventListener("error", function (e) {
+  if (window.__shownStartError) return; window.__shownStartError = true;
+  var show = function () { var d = document.createElement("div"); d.className = "error"; d.style.margin = "16px 32px";
+    d.textContent = "The page could not start because of an error in the TOOL block:\n" + e.message + (e.lineno ? "  (line " + e.lineno + " of index.html)" : "") + "\n\nCopy this message into OpenCode and ask it to fix the problem. Change only the TOOL block.";
+    document.body.prepend(d); };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", show); else show();
+});
+</script>
+<!-- Saved answers for the presets, used when the internet or the API is not available. -->
+<script src="sample-data/sample.js"></script>
+</head>
+<body>
+<header>
+  <div class="tag">Meta-science tool</div>
+  <h1 id="title"></h1>
+  <p id="question"></p>
+</header>
+<main>
+  <section class="panel"><h2>Settings</h2>
+    <button id="reset" class="reset">↺ Reset to start values</button>
+    <div class="presets" id="presets"></div><div class="preset-note" id="presetNote"></div>
+    <div id="inputs"></div>
+    <button id="run" class="run">Run</button>
+    <label class="mode"><input type="checkbox" id="sampleMode"> Use saved sample data (no internet needed)</label>
+    <div class="status" id="status"></div>
+  </section>
+  <section>
+    <div id="notices"></div>
+    <div class="cards" id="cards"></div>
+    <div class="panel"><h2 id="chartTitle">Chart</h2><div id="chart"><p style="font:14px system-ui,sans-serif;color:#57534e">Press Run to see the result.</p></div><div class="legend" id="legend"></div></div>
+    <div class="takeaway" id="takeaway"></div>
+    <details open><summary>How this tool works</summary><div id="method"></div></details>
+    <details><summary>Every result, one row each (check them!)</summary><div class="tablewrap" id="table"></div></details>
+  </section>
+</main>
+<footer id="footer"></footer>
+
+<script>
+// ===== EDIT BELOW ===========================================================================
+const TOOL = {
+  meta: {
+    title: "The file-drawer meter",
+    question: "What share of preregistrations ever become a published paper?",
+    author: "Your first name",
+  },
+  inputs: [
+    { id: "topic",    label: "Topic (words to search OSF registrations for)", type: "text",   value: "anchoring", help: "Searches titles, descriptions and keywords" },
+    { id: "fromYear", label: "Registered from year", type: "number", value: 2017, min: 2012, max: 2026, help: "First registration year" },
+    { id: "toYear",   label: "Registered to year",   type: "number", value: 2018, min: 2012, max: 2026, help: "Last registration year" },
+    { id: "maxRegs",  label: "Check at most this many registrations", type: "number", value: 40, min: 1, max: 100, help: "One Crossref call each, about 1.2 s per call" },
+  ],
+  presets: [
+    { name: "Anchoring 2017–2018",      values: { topic: "anchoring",      fromYear: 2017, toYear: 2018 }, note: "A classic judgment-and-decision-making effect" },
+    { name: "Ego depletion 2017–2018",  values: { topic: "ego depletion",  fromYear: 2017, toYear: 2018 }, note: "An effect at the centre of the replication crisis" },
+    { name: "Growth mindset 2017–2018", values: { topic: "growth mindset", fromYear: 2017, toYear: 2018 }, note: "An education intervention with many preregistered trials" },
+  ],
+  async run(p, api) {
+    // ----- helpers: the matching rules come word for word from the idea card -----
+    const STOP = new Set(("a an the of and or in on for to with by from at as is are be study effect effects " +
+      "using via vs versus its their into between among do does how what when why role pre registration " +
+      "preregistration registered report protocol replication experiment part").split(" "));
+    const IGNORE_NAME = new Set(["jr", "lab", "good"]); // surnames that do not count as shared authors
+    const PAPER_TYPES = new Set(["journal-article", "proceedings-article", "book-chapter", "report", "dissertation", "monograph", "book"]);
+    const unesc = t => String(t).replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+    const flat = s => String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); // lower case, accents removed
+    const contentWords = t => flat(t).split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !STOP.has(w));
+    const normSurname = s => { const w = flat(s).replace(/[^a-z]/g, ""); return w.length >= 3 && !IGNORE_NAME.has(w) ? w : ""; };
+    const kindOf = (type, doi) => {
+      const d = String(doi || "").toLowerCase();
+      if (type === "posted-content" || d.indexOf("10.2139/ssrn") === 0 || d.indexOf("10.31234/") === 0 || d.indexOf("10.31219/") === 0) return "preprint";
+      return PAPER_TYPES.has(type) ? "paper" : ""; // any other type is never accepted
+    };
+    const yearOf = x => (x && x["date-parts"] && x["date-parts"][0]) ? x["date-parts"][0][0] : null;
+
+    // ----- Rule 1: collect the registrations (call A, one call per year) -----
+    const byId = new Map();
+    for (let y = p.fromYear; y <= p.toYear; y++) {
+      api.progress("Asking SHARE for registrations about '" + p.topic + "' from " + y);
+      const url = "https://share.osf.io/trove/index-card-search?cardSearchText=" + encodeURIComponent(p.topic) +
+        "&cardSearchFilter[resourceType]=Registration&cardSearchFilter[dateCreated]=" + y +
+        "&page[size]=100&acceptMediatype=application/vnd.api%2Bjson";
+      const data = await api.getJSON(url);
+      const total = data.attributes ? data.attributes.totalResultCount : undefined;
+      api.progress("Year " + y + ": about " + (typeof total === "number" ? total : (data.included || []).length) + " matching registrations");
+      (data.included || []).forEach(card => {
+        if (card.type !== "index-card") return;
+        const m = (card.attributes || {}).resourceMetadata || {};
+        const osfLink = m["@id"] || "";
+        const id = osfLink ? osfLink.split("/").filter(Boolean).pop() : "";
+        if (!id || byId.has(id)) return; // remove duplicates by OSF id
+        const surnames = [];
+        (m.creator || []).forEach(c => {
+          let fam = (c["foaf:familyName"] && c["foaf:familyName"][0]) ? c["foaf:familyName"][0]["@value"] : "";
+          if (!fam && c.name && c.name[0]) fam = String(c.name[0]["@value"]).trim().split(/\s+/).pop();
+          const n = normSurname(fam);
+          if (n && surnames.indexOf(n) < 0) surnames.push(n);
+        });
+        const dois = []; // OSF's own paper links, as DOIs
+        const grab = v => {
+          if (!v) return;
+          let s = String(v);
+          if (s.indexOf("https://doi.org/") === 0) s = s.slice("https://doi.org/".length);
+          if (s.indexOf("10.17605/") === 0) return; // this is the registration itself
+          if (s.indexOf("10.") === 0 && dois.indexOf(s) < 0) dois.push(s);
+        };
+        (m.hasPapersResource || []).forEach(x => grab(x && x["@id"]));
+        (m["dcterms:relation"] || []).forEach(x => grab(x && x["@id"]));
+        byId.set(id, {
+          id: id, osfLink: osfLink,
+          title: (m.title && m.title[0]) ? unesc(m.title[0]["@value"]) : "",
+          date: (m.dateCreated && m.dateCreated[0]) ? String(m.dateCreated[0]["@value"]).slice(0, 10) : "", // the registration date
+          surnames: surnames, dois: dois,
+        });
+      });
+    }
+    const regs = Array.from(byId.values()).sort((a, b) => (a.date || "").localeCompare(b.date || "") || a.id.localeCompare(b.id));
+    const regCount = regs.length;
+
+    // ----- Rule 2: merge repeats (same title content words and at least one shared surname) -----
+    const allStudies = [];
+    regs.forEach(r => {
+      const key = contentWords(r.title).join(" ");
+      const twin = allStudies.find(s => s.key === key && r.surnames.some(n => s.surnames.indexOf(n) >= 0));
+      if (twin) {
+        twin.links.push(r.osfLink); // keep all their OSF links
+        if (r.date && (!twin.date || r.date < twin.date)) twin.date = r.date; // keep the earliest date
+        r.surnames.forEach(n => { if (twin.surnames.indexOf(n) < 0) twin.surnames.push(n); });
+        r.dois.forEach(d => { if (twin.dois.indexOf(d) < 0) twin.dois.push(d); });
+      } else {
+        allStudies.push({ key: key, title: r.title, date: r.date, surnames: r.surnames.slice(), dois: r.dois.slice(), links: [r.osfLink] });
+      }
+    });
+    const studies = allStudies.slice(0, p.maxRegs); // then keep the first maxRegs studies
+    const cut = allStudies.length - studies.length;
+
+    // ----- Rules 3 and 4: the OSF link first, otherwise search Crossref -----
+    const rows = [];
+    for (let i = 0; i < studies.length; i++) {
+      const s = studies[i];
+      let found = "", how = "", doi = "", pubYear = null, evidence = "";
+      let osfPreprint = null; // an OSF-linked preprint is kept unless the search finds a paper
+
+      if (s.dois.length) { // Rule 3: OSF names a paper itself (call B, use the first DOI)
+        api.progress("Checking study " + (i + 1) + " of " + studies.length + " (OSF links a DOI)");
+        doi = s.dois[0];
+        try {
+          const d = (await api.getJSON("https://api.crossref.org/works/" + doi)).message || {};
+          pubYear = yearOf(d.issued);
+          const kind = kindOf(d.type, doi);
+          if (kind === "paper") { found = "paper"; how = "OSF link"; }
+          else if (kind === "preprint") { osfPreprint = { doi: doi, year: pubYear }; doi = ""; pubYear = null; }
+          else { doi = ""; pubYear = null; } // a type that is never accepted: search instead
+        } catch (e) { pubYear = null; } // 404 etc.: keep the DOI with year unknown, and search instead
+      }
+
+      if (!found) { // Rule 4: search Crossref for the paper (call C)
+        api.progress("Searching Crossref for study " + (i + 1) + " of " + studies.length);
+        const url = "https://api.crossref.org/works?query.bibliographic=" + encodeURIComponent(s.title) +
+          "&filter=from-pub-date:" + s.date + "&rows=5&select=DOI,title,author,issued,type&query.author=" +
+          encodeURIComponent(s.surnames.slice(0, 3).join(" "));
+        const data = await api.getJSON(url);
+        const rWords = contentWords(s.title);
+        let best = null;
+        ((data.message || {}).items || []).forEach(it => {
+          const cWords = contentWords((it.title && it.title[0]) ? it.title[0] : "");
+          const ts = rWords.length ? rWords.filter(w => cWords.indexOf(w) >= 0).length / rWords.length : 0;
+          const cNames = [];
+          (it.author || []).forEach(a => { const n = normSurname(a.family); if (n && cNames.indexOf(n) < 0) cNames.push(n); });
+          const a = s.surnames.filter(n => cNames.indexOf(n) >= 0).length;
+          const kind = kindOf(it.type, it.DOI);
+          if (!kind) return;
+          const ok = (a >= 3 && ts >= 0.30) || (a >= 2 && ts >= 0.45) || (a >= 1 && ts >= 0.80 && rWords.length >= 3);
+          if (!ok) return;
+          const cand = { kind: kind, ts: ts, a: a, year: yearOf(it.issued), doi: it.DOI };
+          if (!best) { best = cand; return; }
+          // several accepted: paper before preprint, then higher ts (rounded to 0.1), then earliest year
+          const better = (cand.kind === "paper" && best.kind !== "paper") ||
+            (cand.kind === best.kind && (Math.round(cand.ts * 10) > Math.round(best.ts * 10) ||
+              (Math.round(cand.ts * 10) === Math.round(best.ts * 10) && (cand.year || 9999) < (best.year || 9999))));
+          if (better) best = cand;
+        });
+        if (best && best.kind === "paper") { found = "paper"; how = "Crossref match"; doi = best.doi; pubYear = best.year; evidence = Math.round(best.ts * 100) + "% / " + best.a; }
+        else if (osfPreprint) { found = "preprint"; how = "OSF link"; doi = osfPreprint.doi; pubYear = osfPreprint.year; }
+        else if (best) { found = "preprint"; how = "Crossref match"; doi = best.doi; pubYear = best.year; evidence = Math.round(best.ts * 100) + "% / " + best.a; }
+      }
+
+      const regYear = parseInt(s.date.slice(0, 4), 10);
+      rows.push({
+        title: s.title,
+        osfLink: s.links[0],
+        date: s.date,
+        found: found, // "paper", "preprint" or "" (= nothing found; "not found" is not "not published")
+        how: how, // "OSF link" or "Crossref match"
+        doi: doi,
+        doiLink: doi ? "https://doi.org/" + doi : "",
+        year: pubYear,
+        yearsToPaper: (found === "paper" && pubYear !== null && regYear) ? Math.max(0, pubYear - regYear) : null, // Rule 5
+        evidence: evidence, // "title words % / shared surnames" (empty for OSF links)
+        moreLinks: s.links.slice(1), // OSF links of merged repeats: "(+N more with this title)"
+      });
+    }
+
+    // ----- the five cards -----
+    const n = rows.length;
+    const papers = rows.filter(r => r.found === "paper");
+    const preprints = rows.filter(r => r.found === "preprint");
+    const pct = k => n ? round(100 * k / n, 1) + "%" : "0%";
+    const ys = papers.map(r => r.yearsToPaper).filter(v => v !== null).sort((a, b) => a - b);
+    let median = "–";
+    if (ys.length) { const mid = Math.floor(ys.length / 2); median = ys.length % 2 ? ys[mid] : round((ys[mid - 1] + ys[mid]) / 2, 1); }
+    // ----- the chart: share with a paper, by years since registration -----
+    const latest = rows.reduce((mx, r) => Math.max(mx, parseInt(r.date.slice(0, 4), 10) || 0), 0);
+    const lastK = n ? Math.max(0, api.asOfYear - latest) : 0;
+    const ks = []; for (let k = 0; k <= lastK; k++) ks.push(k);
+    const yearsOf = r => { const y = parseInt(r.date.slice(0, 4), 10); return (r.year !== null && y) ? Math.max(0, r.year - y) : null; };
+    const cumPct = ok => ks.map(k => round(100 * rows.filter(r => ok(r) && yearsOf(r) !== null && yearsOf(r) <= k).length / (n || 1), 1));
+
+    // ----- the table: one row per study, so every result can be checked -----
+    const tableRows = rows.map(r => [
+      { text: r.title + (r.moreLinks.length ? " (+" + r.moreLinks.length + " more with this title)" : ""), href: r.osfLink },
+      r.date,
+      r.found === "paper" ? "paper" : r.found === "preprint" ? "preprint" : "nothing found",
+      r.how,
+      r.doi ? { text: r.doi, href: r.doiLink } : "",
+      r.year === null ? "" : r.year,
+      r.evidence,
+    ]);
+    return {
+      cards: [
+        { label: "Studies checked", value: n, note: "from " + regCount + " registrations, " + (regCount - allStudies.length) + " merged" + (cut > 0 ? ", " + cut + " not checked (limit)" : "") },
+        { label: "Paper found", value: pct(papers.length), note: papers.length + " of " + n },
+        { label: "Paper or preprint found", value: pct(papers.length + preprints.length), note: (papers.length + preprints.length) + " of " + n },
+        { label: "Linked by OSF itself", value: rows.filter(r => r.how === "OSF link").length, note: "studies whose OSF page names a paper or preprint" },
+        { label: "Median years to paper", value: median, note: "papers only" },
+      ],
+      chart: {
+        type: "line",
+        title: "Share with a paper found, by years since registration",
+        xLabel: "Years since registration",
+        yLabel: "% of studies",
+        x: ks,
+        yMin: 0, yMax: 100,
+        series: [
+          { name: "Paper found", values: cumPct(r => r.found === "paper") },
+          { name: "Paper or preprint found", values: cumPct(r => r.found === "paper" || r.found === "preprint") },
+        ],
+      },
+      table: {
+        columns: ["Registration", "Registered", "Found", "How", "DOI", "Year", "Title words % / shared surnames"],
+        rows: tableRows,
+      },
+      studies: rows, // one object per study, everything the results table needs
+    };
+  },
+  takeaway(p, r) {
+    if (r.cards[0].value === 0) {
+      return "Nothing matched: no preregistered studies about '" + p.topic + "' were found on OSF for " + p.fromYear + "–" + p.toYear + ". Try a broader topic or more years.";
+    }
+    return "Of " + r.cards[0].value + " preregistered studies about '" + p.topic + "' on OSF, we found a published paper for " + r.cards[1].value + " and a paper or preprint for " + r.cards[2].value + ". This is a lower bound: 'not found' does not mean 'not published' (in a hand-check, this matching missed about 4 in 10 registrations that OSF says were published), and every 'found' should be opened and checked.";
+  },
+  methodology: {
+    how: "For a topic and a range of years, the tool lists the OSF preregistrations (SHARE, OSF's search index) and looks for each one's paper: first a link that OSF itself holds, then a search in Crossref by title and authors. It shows the share with a paper found, by years since registration.",
+    assumptions: [
+      "'Not found' does not mean 'not published': titles change and some studies appear inside bigger papers, so the share found is a lower bound.",
+      "'Found' does not prove it is the same study: the match is by title words and surnames, so every match is shown with a link and must be opened and checked.",
+      "Only papers published on or after the registration date are counted.",
+      "A preprint (PsyArXiv, OSF Preprints, SSRN, Crossref type 'posted-content') is not a published paper and is reported separately.",
+    ],
+    references: [
+      "Ensinck, E. N. F., & Lakens, D. (2025). An inception-cohort study quantifying how many registered studies are publicly shared. *Advances in Methods and Practices in Psychological Science, 8*(1). https://doi.org/10.1177/25152459241296031",
+      "Franco, A., Malhotra, N., & Simonovits, G. (2014). Publication bias in the social sciences: Unlocking the file drawer. *Science, 345*(6203), 1502–1505. https://doi.org/10.1126/science.1255484",
+      "Rosenthal, R. (1979). The file drawer problem and tolerance for null results. *Psychological Bulletin, 86*(3), 638–641. https://doi.org/10.1037/0033-2909.86.3.638",
+    ],
+  },
+};
+// ===== EDIT ABOVE ===========================================================================
+</script>
+
+<script>
+// ===== DO NOT EDIT BELOW THIS LINE ==========================================================
+function round(x, d = 0) { const f = Math.pow(10, d); return Math.round(x * f) / f; }
+function range(a, b, step = 1) { const out = []; for (let v = a; v <= b + 1e-9; v += step) out.push(round(v, 10)); return out; }
+
+const COLORS = ["#b45309", "#1d4ed8", "#15803d", "#7c3aed", "#be123c", "#0e7490"];
+const state = {};
+const $ = id => document.getElementById(id);
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function fmtFull(v) { return typeof v === "number" ? v.toLocaleString("en", { maximumFractionDigits: 3 }) : String(v); }
+function fmt(v) { if (typeof v !== "number") return String(v); const a = Math.abs(v); if (a >= 1e6) return round(v / 1e6, 1) + "M"; if (a >= 1e4) return round(v / 1e3, 0) + "k"; if (a >= 100) return round(v, 0).toString(); if (a >= 1) return round(v, 1).toString(); return round(v, 3).toString(); }
+const QS = new URLSearchParams(location.search);
+
+// ---------- the internet helper ----------
+const SAMPLE = window.SAMPLE_DATA || { asOfYear: null, responses: {} };
+function canonicalKey(url) { // same call = same key, whatever the order or encoding of the parameters
+  try { const u = new URL(url); const ps = [...u.searchParams.entries()].map(([k, v]) => [k, v.trim()]).sort((a, b) => (a[0] + "=" + a[1]).localeCompare(b[0] + "=" + b[1]));
+    return u.origin + decodeURIComponent(u.pathname).toLowerCase().replace(/\/+$/, "") + "?" + ps.map(([k, v]) => k + "=" + v).join("&"); } catch (e) { return url; }
+}
+function looseKey(url) { // a forgiving key for the saved sample: ignores names, field lists and page sizes, and spacing/case/accents
+  try { const u = new URL(url), skip = new Set(["query.author", "select", "rows", "acceptMediatype", "page[size]", "mailto"]);
+    const ps = [...u.searchParams.entries()].filter(([k]) => !skip.has(k)).map(([k, v]) => [k, v.replace(/&amp;/g, "&").normalize("NFKD").toLowerCase().replace(/[^a-z0-9]/g, "")]).sort((a, b) => (a[0] + "=" + a[1]).localeCompare(b[0] + "=" + b[1]));
+    return u.origin + decodeURIComponent(u.pathname).toLowerCase().replace(/\/+$/, "") + "?" + ps.map(([k, v]) => k + "=" + v).join("&"); } catch (e) { return url; }
+}
+function savedToUrl(k) { // saved keys are decoded: re-encode each value so an "&" inside a title does not split it
+  const i = k.indexOf("?"); if (i < 0) return k;
+  return k.slice(0, i + 1) + k.slice(i + 1).split(/&(?=[A-Za-z_.\[\]]+=)/).map(p => { const j = p.indexOf("="); return j < 0 ? p : p.slice(0, j) + "=" + encodeURIComponent(p.slice(j + 1)); }).join("&");
+}
+const LOOSE = {}; Object.keys(SAMPLE.responses || {}).forEach(k => { LOOSE[looseKey(savedToUrl(k))] = k; });
+function sampleGet(url) { const k = canonicalKey(url); const hit = k in SAMPLE.responses ? k : LOOSE[looseKey(url)]; return hit ? JSON.parse(JSON.stringify(SAMPLE.responses[hit])) : undefined; }
+const PACE = { "api.crossref.org": 1200 }, DEFAULT_PACE = 500, lastCall = {};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function cacheGet(k) { try { const s = localStorage.getItem("cache:" + k); return s ? JSON.parse(s) : undefined; } catch (e) { return undefined; } }
+function cachePut(k, v) { try { const s = JSON.stringify(v); if (s.length < 400000) localStorage.setItem("cache:" + k, s); } catch (e) { /* storage full: just do not cache */ } }
+function friendly(url, status, extra) {
+  const host = (() => { try { return new URL(url).host; } catch (e) { return url; } })();
+  if (status === 429) return "The API at " + host + " said 'Too many requests' (429) three times. Many people share this network. Wait one minute and press Run again (answers you already have are kept), or tick 'Use saved sample data'.";
+  if (status === 403) return "The API at " + host + " refused the call (403). Some APIs block automated browsers. Open the page in a normal browser window.";
+  if (status === 0) return "The call to " + host + " did not get through (" + extra + "). Check the internet connection. If the API is down, tick 'Use saved sample data'.\nIf you see 'Failed to fetch' on every call: this API may not allow calls from web pages (CORS).";
+  return "The API at " + host + " answered with error " + status + (extra ? " (" + extra + ")" : "") + ".\nThe address was: " + url;
+}
+function makeApi(mode) {
+  const api = { mode, calls: 0, fromSample: 0, asOfYear: mode === "sample" && SAMPLE.asOfYear ? SAMPLE.asOfYear : new Date().getFullYear(),
+    progress(t) { $("status").textContent = t; },
+    async getJSON(url) {
+      const key = canonicalKey(url);
+      if (mode === "sample") {
+        const hit = sampleGet(url); if (hit !== undefined) { api.fromSample++; return hit; }
+        throw new Error("This call is not in the saved sample data (the sample only covers the presets, with the calls written on the idea card):\n" + url);
+      }
+      const cached = cacheGet(key); if (cached !== undefined) return cached;
+      const host = (() => { try { return new URL(url).host; } catch (e) { return ""; } })();
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const wait = (PACE[host] || DEFAULT_PACE) * (attempt ? Math.pow(2, attempt + 1) : 1) - (Date.now() - (lastCall[host] || 0));
+        if (wait > 0) await sleep(wait);
+        lastCall[host] = Date.now();
+        const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 20000);
+        let res;
+        try { res = await fetch(url, { signal: ctl.signal, headers: { Accept: "application/json" } }); api.calls++; }
+        catch (e) { clearTimeout(timer);
+          const hit = sampleGet(url); if (hit !== undefined) { api.fromSample++; notice("The internet call failed, so saved sample data was used for some results."); return hit; }
+          throw new Error(friendly(url, 0, e.name === "AbortError" ? "no answer after 20 seconds" : e.message)); }
+        clearTimeout(timer);
+        if (res.status === 429 && attempt < 3) { api.progress("The API asks us to slow down, waiting…"); continue; }
+        if (!res.ok) {
+          const hit = sampleGet(url); if (hit !== undefined) { api.fromSample++; notice("The API answered with an error, so saved sample data was used for some results."); return hit; }
+          throw new Error(friendly(url, res.status, res.statusText));
+        }
+        const data = await res.json(); cachePut(key, data); return data;
+      }
+    },
+  };
+  return api;
+}
+function notice(t) { if (![...$("notices").children].some(d => d.textContent === t)) { const d = document.createElement("div"); d.className = "notice"; d.textContent = t; $("notices").appendChild(d); } }
+
+// ---------- drawing ----------
+function niceTicks(lo, hi, n = 5) {
+  if (hi === lo) { hi = lo + 1; }
+  const span = hi - lo, step0 = span / n, mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= step0) || 10 * mag;
+  const ticks = []; for (let v = Math.floor(lo / step) * step; v <= hi + step * 1e-9; v += step) ticks.push(round(v, 10));
+  return ticks;
+}
+function drawChart(chart) {
+  const W = 760, H = 360, L = 64, R = 16, T = 16, B = 52;
+  const iw = W - L - R, ih = H - T - B;
+  const all = chart.series.flatMap(s => s.values).filter(v => Number.isFinite(v));
+  let lo = Math.min(0, ...all), hi = Math.max(1e-9, ...all);
+  if (chart.yMin !== undefined) lo = chart.yMin; if (chart.yMax !== undefined) hi = chart.yMax;
+  const ticks = niceTicks(lo, hi); lo = Math.min(lo, ticks[0]); hi = Math.max(hi, ticks[ticks.length - 1]);
+  const y = v => T + ih - (v - lo) / (hi - lo || 1) * ih;
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(chart.title || "chart")}">`;
+  ticks.forEach(t => { s += `<line x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}" stroke="#e7e5e4"/><text x="${L - 8}" y="${y(t) + 4}" text-anchor="end">${fmt(t)}</text>`; });
+  const n = chart.x.length;
+  const labelEvery = Math.max(1, Math.ceil(n / 12));
+  if (chart.type === "bar") {
+    const k = chart.series.length, gw = iw / n, bw = Math.max(2, (gw * 0.8) / k);
+    chart.x.forEach((xl, i) => {
+      chart.series.forEach((ser, j) => {
+        const v = ser.values[i]; if (!Number.isFinite(v)) return;
+        const x0 = L + i * gw + gw * 0.1 + j * bw, y0 = y(Math.max(v, 0)), y1 = y(Math.min(v, 0));
+        s += `<rect x="${x0}" y="${y0}" width="${bw - 1}" height="${Math.max(0.5, y1 - y0)}" fill="${COLORS[j % 6]}" rx="2"><title>${esc(ser.name)} · ${esc(xl)}: ${fmtFull(v)}</title></rect>`;
+      });
+      if (i % labelEvery === 0) s += `<text x="${L + i * gw + gw / 2}" y="${H - B + 18}" text-anchor="middle">${esc(xl)}</text>`;
+    });
+  } else {
+    const xs = chart.x.map(Number), numeric = xs.every(Number.isFinite);
+    const xmin = numeric ? Math.min(...xs) : 0, xmax = numeric ? Math.max(...xs) : n - 1;
+    const xp = i => L + ((numeric ? xs[i] : i) - xmin) / ((xmax - xmin) || 1) * iw;
+    chart.series.forEach((ser, j) => {
+      const pts = ser.values.map((v, i) => Number.isFinite(v) ? `${xp(i)},${y(v)}` : null).filter(Boolean).join(" ");
+      s += `<polyline points="${pts}" fill="none" stroke="${COLORS[j % 6]}" stroke-width="2.5" stroke-linejoin="round"/>`;
+      ser.values.forEach((v, i) => { if (Number.isFinite(v)) s += `<circle cx="${xp(i)}" cy="${y(v)}" r="5" fill="${COLORS[j % 6]}" fill-opacity="${n <= 30 ? 0.9 : 0.01}"><title>${esc(ser.name)} · ${esc(String(chart.x[i]))}: ${fmtFull(v)}</title></circle>`; });
+    });
+    chart.x.forEach((xl, i) => { if (i % labelEvery === 0 || i === n - 1) s += `<text x="${xp(i)}" y="${H - B + 18}" text-anchor="middle">${esc(numeric ? fmt(xs[i]) : xl)}</text>`; });
+  }
+  s += `<line x1="${L}" x2="${W - R}" y1="${y(lo)}" y2="${y(lo)}" stroke="#a8a29e"/>`;
+  s += `<text x="${L + iw / 2}" y="${H - 8}" text-anchor="middle">${esc(chart.xLabel || "")}</text>`;
+  s += `<text transform="translate(14 ${T + ih / 2}) rotate(-90)" text-anchor="middle">${esc(chart.yLabel || "")}</text></svg>`;
+  $("chart").innerHTML = s;
+  $("chartTitle").textContent = chart.title || "Chart";
+  $("legend").innerHTML = chart.series.length > 1 || chart.type === "bar" ? chart.series.map((ser, j) => `<span style="--c:${COLORS[j % 6]}">${esc(ser.name)}</span>`).join("") : "";
+}
+function cell(c) {
+  if (c && typeof c === "object") return c.href && /^https?:\/\//.test(c.href) ? `<a href="${esc(c.href)}" target="_blank" rel="noopener">${esc(c.text ?? c.href)}</a>` : esc(c.text ?? "");
+  return esc(c ?? "");
+}
+function drawTable(t) {
+  if (!t || !t.columns) { $("table").innerHTML = ""; return; }
+  $("table").innerHTML = `<table><thead><tr>${t.columns.map(c => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${(t.rows || []).map(r => `<tr>${r.map(c => `<td>${cell(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+}
+
+// ---------- running ----------
+function readInputs() {
+  TOOL.inputs.forEach(inp => { const el = $("in-" + inp.id); let v = el.value; if (inp.type === "number") { v = Number(v); if (!Number.isFinite(v)) v = inp.value; if (inp.min !== undefined) v = Math.max(inp.min, v); if (inp.max !== undefined) v = Math.min(inp.max, v); } state[inp.id] = v; });
+}
+function writeInputs() { TOOL.inputs.forEach(inp => { $("in-" + inp.id).value = state[inp.id]; }); }
+let running = false;
+async function runTool() {
+  if (running) return; running = true; $("run").disabled = true;
+  readInputs(); writeInputs();
+  try { history.replaceState(null, "", location.search + "#" + new URLSearchParams(state).toString()); } catch (e) { }
+  const mode = $("sampleMode").checked ? "sample" : "live";
+  const api = makeApi(mode);
+  $("notices").innerHTML = ""; $("cards").innerHTML = ""; $("takeaway").textContent = "";
+  if (mode === "sample") notice("Saved sample data (snapshot " + (SAMPLE.savedOn || "?") + "): no internet calls. 'Years since registration' are counted to " + api.asOfYear + ".");
+  const t0 = Date.now(); window.__runDone = false; window.__lastError = null;
+  try {
+    const r = await TOOL.run({ ...state }, api);
+    if (!r) throw new Error("run() returned nothing. It must return { cards, chart, table }.");
+    $("cards").innerHTML = (r.cards || []).map(c => `<div class="card"><div class="l">${esc(c.label)}</div><div class="v">${esc(c.value)}</div>${c.note ? `<div class="n">${esc(c.note)}</div>` : ""}</div>`).join("");
+    if (r.chart) drawChart(r.chart);
+    drawTable(r.table);
+    $("takeaway").textContent = TOOL.takeaway ? TOOL.takeaway({ ...state }, r) : "";
+    $("status").textContent = "Done in " + round((Date.now() - t0) / 1000, 1) + " s · " + api.calls + " internet calls" + (api.fromSample ? " · " + api.fromSample + " answers from the saved sample" : "");
+    window.__lastResult = r;
+  } catch (e) {
+    window.__lastError = String(e && e.message || e);
+    $("chart").innerHTML = ""; $("legend").innerHTML = "";
+    $("cards").innerHTML = `<div class="error">Something in run() or takeaway() went wrong:\n${esc(e && e.message || e)}\n\nCopy this message into OpenCode and ask it to fix the problem.</div>`;
+    $("status").textContent = "Stopped after " + api.calls + " internet calls.";
+  }
+  window.__runDone = true; running = false; $("run").disabled = false;
+}
+
+function setup() {
+  const m = TOOL.meta; document.title = m.title;
+  $("title").textContent = m.title; $("question").textContent = m.question;
+  $("footer").textContent = "Built by " + (m.author || "a student") + " in the Meta-science course, University of Innsbruck. A teaching tool: check every result yourself.";
+  const fromUrl = new URLSearchParams(location.hash.slice(1));
+  TOOL.inputs.forEach(inp => { state[inp.id] = fromUrl.has(inp.id) ? (inp.type === "number" ? Number(fromUrl.get(inp.id)) : fromUrl.get(inp.id)) : inp.value; });
+  $("inputs").innerHTML = TOOL.inputs.map(inp => `<div class="input"><label for="in-${esc(inp.id)}">${esc(inp.label)}</label><input id="in-${esc(inp.id)}" type="${inp.type === "number" ? "number" : "text"}" ${inp.min !== undefined ? `min="${inp.min}"` : ""} ${inp.max !== undefined ? `max="${inp.max}"` : ""}>${inp.help ? `<div class="help">${esc(inp.help)}</div>` : ""}</div>`).join("");
+  writeInputs();
+  document.querySelectorAll(".input input").forEach(el => el.addEventListener("input", () => { document.querySelectorAll(".presets button").forEach(b => b.classList.remove("on")); $("presetNote").textContent = ""; }));
+  document.querySelectorAll(".input input").forEach(el => el.addEventListener("keydown", e => { if (e.key === "Enter") runTool(); }));
+  $("presets").innerHTML = (TOOL.presets || []).map((p, i) => `<button data-i="${i}">${esc(p.name)}</button>`).join("");
+  document.querySelectorAll(".presets button").forEach(b => b.addEventListener("click", () => {
+    const p = TOOL.presets[b.dataset.i]; TOOL.inputs.forEach(inp => { state[inp.id] = inp.value; }); Object.assign(state, p.values); writeInputs();
+    document.querySelectorAll(".presets button").forEach(x => x.classList.toggle("on", x === b)); $("presetNote").textContent = p.note || "";
+  }));
+  $("reset").addEventListener("click", () => {
+    TOOL.inputs.forEach(inp => { state[inp.id] = inp.value; }); writeInputs();
+    document.querySelectorAll(".presets button").forEach(x => x.classList.remove("on")); $("presetNote").textContent = "";
+  });
+  $("run").addEventListener("click", runTool);
+  $("sampleMode").checked = QS.get("sample") === "1";
+  if (!window.SAMPLE_DATA) { $("sampleMode").disabled = true; $("sampleMode").parentElement.title = "sample-data/sample.js was not found"; }
+  const md = TOOL.methodology || {};
+  $("method").innerHTML = `<p>${esc(md.how || "")}</p>` + (md.assumptions?.length ? `<p><b>Assumptions</b></p><ul>${md.assumptions.map(a => `<li>${esc(a)}</li>`).join("")}</ul>` : "") + (md.references?.length ? `<p><b>References</b></p><ul>${md.references.map(a => `<li>${esc(a)}</li>`).join("")}</ul>` : "");
+  if (QS.get("autorun") === "1") runTool();
+}
+if (typeof document !== "undefined" && document.getElementById("title")) setup();
+</script>
+</body>
+</html>
